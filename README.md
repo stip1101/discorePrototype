@@ -4,9 +4,11 @@ Discore предоставляет глубокую аналитику и AI-а�
 
 ## ✨ Особенности
 
-- 🧠 **AI-анализ** сообщений через Gemini API
+- 🧠 **AI-анализ** сообщений через OpenAI API
 - 📊 **Детальная аналитика** активности пользователей
 - 🎯 **Детекция токсичности** в реальном времени  
+- 🤖 **Детекция AI-контента** для верификации подлинности
+- 💎 **Оценка качества** контента и конструктивности
 - 📈 **Предиктивная аналитика** для роста сообщества
 - 🏆 **Рейтинги и лидерборды** пользователей
 - 🌐 **Красивый веб-интерфейс** для просмотра статистики
@@ -34,10 +36,10 @@ discore/
 ### Предварительные требования
 
 - Node.js 18+
-- MongoDB 6.0+
+- MySQL 8.0+
 - Redis 6.0+
 - Discord Application с ботом
-- Gemini API ключ
+- OpenAI API ключ
 
 ### 1. Настройка Discord бота
 
@@ -47,11 +49,12 @@ discore/
 4. В "OAuth2 > URL Generator" выберите scopes: `bot`, `applications.commands`
 5. Permissions: `Read Messages`, `Send Messages`, `Read Message History`, `Add Reactions`
 
-### 2. Получение Gemini API ключа
+### 2. Получение OpenAI API ключа
 
-1. Перейдите на [Google AI Studio](https://makersuite.google.com/app/apikey)
-2. Создайте новый API ключ
-3. Сохраните ключ для использования в проекте
+1. Перейдите на [OpenAI Platform](https://platform.openai.com/api-keys)
+2. Войдите в аккаунт или зарегистрируйтесь
+3. Создайте новый API ключ
+4. Сохраните ключ для использования в проекте
 
 ### 3. Установка и настройка
 
@@ -79,11 +82,16 @@ cp .env.example .env
 DISCORD_TOKEN=your_discord_bot_token
 DISCORD_CLIENT_ID=your_discord_application_id
 
-# Gemini AI Configuration  
-GEMINI_API_KEY=your_gemini_api_key
+# OpenAI Configuration  
+OPENAI_API_KEY=your_openai_api_key
+OPENAI_MODEL=gpt-4.1-nano-2025-04-14
 
 # Database Configuration
-DATABASE_URL=mongodb://localhost:27017/discore
+DB_HOST=localhost
+DB_PORT=3306
+DB_USER=your_db_user
+DB_PASSWORD=your_db_password
+DB_NAME=discore
 REDIS_URL=redis://localhost:6379
 
 # Server Configuration
@@ -94,8 +102,8 @@ NODE_ENV=development
 ### 5. Запуск базы данных
 
 ```bash
-# MongoDB
-mongod --dbpath ./data/db
+# MySQL
+# Убедитесь, что MySQL Server запущен на порту 3306
 
 # Redis  
 redis-server

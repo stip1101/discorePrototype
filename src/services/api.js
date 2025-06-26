@@ -1,134 +1,179 @@
-const API_BASE_URL = process.env.NODE_ENV === 'production' 
-  ? 'https://api.discore.com'
-  : 'http://localhost:3001';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000/api';
 
 class ApiService {
   constructor() {
-    this.baseUrl = `${API_BASE_URL}/api`;
+    this.baseURL = API_BASE_URL;
   }
 
-  async fetchWithTimeout(url, options = {}, timeout = 10000) {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
+  async request(endpoint, options = {}) {
+    const url = `${this.baseURL}${endpoint}`;
+    
+    const config = {
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+      ...options,
+    };
 
     try {
-      const response = await fetch(url, {
-        ...options,
-        signal: controller.signal,
-        headers: {
-          'Content-Type': 'application/json',
-          ...options.headers
-        }
-      });
-
-      clearTimeout(timeoutId);
-
+      const response = await fetch(url, config);
+      
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        const errorData = await response.json().catch(() => ({ 
+          error: `HTTP ${response.status}: ${response.statusText}` 
+        }));
+        throw new Error(errorData.error || 'Request failed');
       }
 
       const data = await response.json();
-      
-      if (!data.success) {
-        throw new Error(data.error || 'Неизвестная ошибка API');
-      }
-
-      return data.data;
+      return data.data || data;
     } catch (error) {
-      clearTimeout(timeoutId);
-      
-      if (error.name === 'AbortError') {
-        throw new Error('Превышено время ожидания запроса');
-      }
-      
+      console.error(`API Error (${endpoint}):`, error);
       throw error;
     }
   }
 
-  // Получить серверы для публичного рейтинга
-  async getPublicServers(params = {}) {
-    const queryParams = new URLSearchParams({
-      page: params.page || 1,
-      limit: params.limit || 20,
-      sortBy: params.sortBy || 'healthScore'
-    });
-
-    return this.fetchWithTimeout(`${this.baseUrl}/servers/public?${queryParams}`);
-  }
-
-  // Получить статистику конкретного сервера
-  async getServerStats(guildId, period = '7d') {
-    return this.fetchWithTimeout(`${this.baseUrl}/servers/${guildId}/stats?period=${period}`);
-  }
-
-  // Получить лидерборд сервера
-  async getServerLeaderboard(guildId, type = 'overall', limit = 50) {
-    return this.fetchWithTimeout(`${this.baseUrl}/servers/${guildId}/leaderboard?type=${type}&limit=${limit}`);
-  }
-
-  // Поиск пользователей
-  async searchUsers(username, guildId = null) {
-    const queryParams = new URLSearchParams({ username });
-    if (guildId) queryParams.append('guildId', guildId);
-
-    return this.fetchWithTimeout(`${this.baseUrl}/users/search?${queryParams}`);
-  }
-
-  // Получить анализ пользователя
-  async getUserAnalysis(userId, guildId = null) {
-    const queryParams = guildId ? `?guildId=${guildId}` : '';
-    return this.fetchWithTimeout(`${this.baseUrl}/users/${userId}/analysis${queryParams}`);
-  }
-
-  // Получить общую статистику платформы
+  // Platform statistics
   async getPlatformStats() {
-    return this.fetchWithTimeout(`${this.baseUrl}/platform/stats`);
+    return this.request('/platform/stats');
   }
 
-  // Получить trending серверы
-  async getTrendingServers(limit = 10, period = '24h') {
-    return this.fetchWithTimeout(`${this.baseUrl}/trending/servers?limit=${limit}&period=${period}`);
-  }
-
-  // Получить категории серверов
-  async getServerCategories() {
-    return this.fetchWithTimeout(`${this.baseUrl}/categories`);
-  }
-
-  // Получить серверы по категории
-  async getServersByCategory(category, params = {}) {
-    const queryParams = new URLSearchParams({
-      page: params.page || 1,
-      limit: params.limit || 20
-    });
-
-    return this.fetchWithTimeout(`${this.baseUrl}/categories/${category}/servers?${queryParams}`);
-  }
-
-  // Получить live статистику
+  // Live statistics
   async getLiveStats() {
-    return this.fetchWithTimeout(`${this.baseUrl}/live/stats`);
+    return this.request('/live/stats');
   }
 
-  // Получить ссылку для приглашения бота
-  async getBotInviteUrl() {
-    return this.fetchWithTimeout(`${this.baseUrl}/bot/invite`);
+  // Public servers
+  async getPublicServers(params = {}) {
+    const queryString = new URLSearchParams(params).toString();
+    return this.request(`/servers/public${queryString ? `?${queryString}` : ''}`);
   }
 
-  // Обновить настройки приватности сервера (для владельцев)
-  async updateServerPrivacy(guildId, settings, discordUserId) {
-    return this.fetchWithTimeout(`${this.baseUrl}/servers/${guildId}/privacy`, {
+  // Server details and stats
+  async getServerStats(serverId, period = '7d') {
+    return this.request(`/servers/${serverId}/stats?period=${period}`);
+  }
+
+  // Trigger real-time OpenAI analysis for a server
+  async analyzeServer(serverId) {
+    return this.request(`/servers/${serverId}/analyze`, {
+      method: 'POST'
+    });
+  }
+
+  // Server leaderboard
+  async getServerLeaderboard(serverId, type = 'overall', limit = 50) {
+    return this.request(`/servers/${serverId}/leaderboard?type=${type}&limit=${limit}`);
+  }
+
+  // Trending servers
+  async getTrendingServers(limit = 10, period = '24h') {
+    return this.request(`/trending/servers?limit=${limit}&period=${period}`);
+  }
+
+  // User search and analysis
+  async searchUsers(username, guildId = null) {
+    const params = new URLSearchParams({ username });
+    if (guildId) params.append('guildId', guildId);
+    return this.request(`/users/search?${params.toString()}`);
+  }
+
+  async getUserAnalysis(userId, guildId = null) {
+    const params = guildId ? `?guildId=${guildId}` : '';
+    return this.request(`/users/${userId}/analysis${params}`);
+  }
+
+  // Server categories
+  async getCategories() {
+    return this.request('/categories');
+  }
+
+  async getServersByCategory(category, params = {}) {
+    const queryString = new URLSearchParams(params).toString();
+    return this.request(`/categories/${category}/servers${queryString ? `?${queryString}` : ''}`);
+  }
+
+  // Bot invitation
+  async getBotInvite() {
+    return this.request('/bot/invite');
+  }
+
+  // Server privacy settings (for server owners)
+  async updateServerPrivacy(serverId, settings) {
+    return this.request(`/servers/${serverId}/privacy`, {
       method: 'PUT',
-      body: JSON.stringify({
-        ...settings,
-        discordUserId
-      })
+      body: JSON.stringify(settings),
     });
   }
 
   // Health check
   async healthCheck() {
-    return this.fetchWithTimeout(`${API_BASE_URL}/health`);
+    try {
+      const response = await fetch(`${this.baseURL}/health`);
+      return response.ok;
+    } catch (error) {
+      console.error('Health check failed:', error);
+      return false;
+    }
+  }
+
+  // Batch operations with retry logic
+  async withRetry(operation, maxRetries = 3, delay = 1000) {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        return await operation();
+      } catch (error) {
+        if (attempt === maxRetries) {
+          throw error;
+        }
+        
+        console.warn(`Attempt ${attempt} failed, retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        delay *= 2; // Exponential backoff
+      }
+    }
+  }
+
+  // Cached requests (simple in-memory cache)
+  _cache = new Map();
+  _cacheExpiry = new Map();
+
+  async getCached(key, fetcher, ttl = 30000) { // 30 seconds default TTL
+    const now = Date.now();
+    const expiry = this._cacheExpiry.get(key);
+    
+    if (this._cache.has(key) && expiry && now < expiry) {
+      return this._cache.get(key);
+    }
+    
+    const data = await fetcher();
+    this._cache.set(key, data);
+    this._cacheExpiry.set(key, now + ttl);
+    
+    return data;
+  }
+
+  clearCache() {
+    this._cache.clear();
+    this._cacheExpiry.clear();
+  }
+
+  // Real-time updates simulation (replace with WebSocket when available)
+  startLiveUpdates(callback, interval = 30000) {
+    const updateLoop = async () => {
+      try {
+        const liveStats = await this.getLiveStats();
+        callback(liveStats);
+      } catch (error) {
+        console.error('Live update failed:', error);
+      }
+    };
+
+    updateLoop(); // Initial call
+    const intervalId = setInterval(updateLoop, interval);
+    
+    return () => clearInterval(intervalId);
   }
 }
 

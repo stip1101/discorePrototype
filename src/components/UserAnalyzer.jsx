@@ -1,15 +1,68 @@
 import React, { useState } from 'react';
-import { Search, Shield, Bot, TrendingUp, Users, Award, AlertTriangle, Eye, MessageSquare, Heart, Zap } from 'lucide-react';
-import { mockUsers } from '../data/mockData';
+import { Search, Shield, Bot, TrendingUp, Users, Award, AlertTriangle, Eye, MessageSquare, Heart, Zap, Loader2 } from 'lucide-react';
+import ApiService from '../services/api';
 import { formatNumber, getScoreColor, formatDate } from '../utils/helpers';
 
 const UserAnalyzer = () => {
   const [searchUser, setSearchUser] = useState('');
   const [selectedUser, setSelectedUser] = useState(null);
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState(null);
 
-  const filteredUsers = mockUsers.filter(user =>
-    user.username.toLowerCase().includes(searchUser.toLowerCase())
-  );
+  const handleSearch = async (username) => {
+    if (!username.trim()) {
+      setSearchResults([]);
+      return;
+    }
+
+    try {
+      setSearching(true);
+      setSearchError(null);
+      const results = await ApiService.searchUsers(username.trim());
+      
+      // Преобразуем результаты в формат, ожидаемый компонентом
+      const transformedResults = results.map(user => ({
+        id: user.id,
+        username: user.username,
+        avatar: user.avatar || '👤',
+        role: 'Member', // Временно, пока нет ролевой системы
+        score: user.overall_score,
+        serverScore: user.overall_score,
+        messagesCount: user.total_messages,
+        mentions: user.total_mentions,
+        reactions: user.total_reactions_received,
+        banned: user.ban_count > 0,
+        aiDetection: user.ai_detection_score,
+        languageRatio: { en: 80, ru: 20 }, // Временно
+        joinDate: formatDate(user.first_seen),
+        lastActive: formatDate(user.updated_at),
+        badges: user.overall_score > 90 ? ['High Performer'] : 
+               user.overall_score > 70 ? ['Active Member'] : []
+      }));
+      
+      setSearchResults(transformedResults);
+    } catch (err) {
+      console.error('Ошибка поиска пользователей:', err);
+      setSearchError('Не удалось найти пользователей');
+      setSearchResults([]);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const handleSearchInputChange = (value) => {
+    setSearchUser(value);
+    // Поиск с задержкой
+    if (value.trim().length >= 2) {
+      const timeoutId = setTimeout(() => {
+        handleSearch(value);
+      }, 500);
+      return () => clearTimeout(timeoutId);
+    } else {
+      setSearchResults([]);
+    }
+  };
 
   const getLanguageFlag = (lang) => {
     const flags = {
@@ -56,7 +109,7 @@ const UserAnalyzer = () => {
               type="text"
               placeholder="Search user..."
               value={searchUser}
-              onChange={(e) => setSearchUser(e.target.value)}
+              onChange={(e) => handleSearchInputChange(e.target.value)}
               className="w-full pl-10 pr-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-discord-500"
             />
           </div>
@@ -64,7 +117,7 @@ const UserAnalyzer = () => {
 
         {/* User Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
-          {filteredUsers.map((user) => {
+          {searchResults.map((user) => {
             const risk = getUserRiskLevel(user);
             return (
               <div
@@ -232,27 +285,27 @@ const UserAnalyzer = () => {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <div className="glass-effect rounded-xl p-6 text-center">
             <Users className="w-8 h-8 text-blue-500 mx-auto mb-3" />
-            <div className="text-2xl font-bold text-white">{mockUsers.length}</div>
+            <div className="text-2xl font-bold text-white">{searchResults.length}</div>
             <div className="text-sm text-gray-400">Total Users Analyzed</div>
           </div>
           <div className="glass-effect rounded-xl p-6 text-center">
             <Bot className="w-8 h-8 text-orange-500 mx-auto mb-3" />
             <div className="text-2xl font-bold text-white">
-              {Math.round(mockUsers.reduce((sum, user) => sum + user.aiDetection, 0) / mockUsers.length)}%
+              {Math.round(searchResults.reduce((sum, user) => sum + user.aiDetection, 0) / searchResults.length)}%
             </div>
             <div className="text-sm text-gray-400">Avg AI Detection</div>
           </div>
           <div className="glass-effect rounded-xl p-6 text-center">
             <Shield className="w-8 h-8 text-green-500 mx-auto mb-3" />
             <div className="text-2xl font-bold text-white">
-              {mockUsers.filter(user => !user.banned).length}
+              {searchResults.filter(user => !user.banned).length}
             </div>
             <div className="text-sm text-gray-400">Clean Accounts</div>
           </div>
           <div className="glass-effect rounded-xl p-6 text-center">
             <Award className="w-8 h-8 text-purple-500 mx-auto mb-3" />
             <div className="text-2xl font-bold text-white">
-              {Math.round(mockUsers.reduce((sum, user) => sum + user.score, 0) / mockUsers.length)}
+              {Math.round(searchResults.reduce((sum, user) => sum + user.score, 0) / searchResults.length)}
             </div>
             <div className="text-sm text-gray-400">Avg User Score</div>
           </div>

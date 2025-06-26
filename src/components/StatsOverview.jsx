@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BarChart3, Users, MessageSquare, TrendingUp, Loader2, AlertCircle } from 'lucide-react';
+import { BarChart3, Users, TrendingUp, Loader2, AlertCircle } from 'lucide-react';
 import ApiService from '../services/api';
 import { formatNumber } from '../utils/helpers';
 
@@ -13,7 +13,7 @@ const StatsOverview = () => {
     fetchStats();
     fetchLiveStats();
     
-    // Обновляем live статистику каждые 30 секунд
+    // Update live stats every 30 seconds
     const interval = setInterval(fetchLiveStats, 30000);
     
     return () => clearInterval(interval);
@@ -26,8 +26,8 @@ const StatsOverview = () => {
       setStats(platformStats);
       setError(null);
     } catch (err) {
-      console.error('Ошибка загрузки статистики:', err);
-      setError('Не удалось загрузить статистику платформы');
+      console.error('Error loading stats:', err);
+      setError('Failed to load platform statistics');
     } finally {
       setLoading(false);
     }
@@ -38,7 +38,7 @@ const StatsOverview = () => {
       const live = await ApiService.getLiveStats();
       setLiveStats(live);
     } catch (err) {
-      console.error('Ошибка загрузки live статистики:', err);
+      console.error('Error loading live stats:', err);
     }
   };
 
@@ -48,7 +48,7 @@ const StatsOverview = () => {
         <div className="container mx-auto px-6">
           <div className="flex items-center justify-center">
             <Loader2 className="w-8 h-8 text-discord-500 animate-spin" />
-            <span className="ml-3 text-white">Загружаем статистику...</span>
+            <span className="ml-3 text-white">Loading statistics...</span>
           </div>
         </div>
       </section>
@@ -70,8 +70,8 @@ const StatsOverview = () => {
 
   const statCards = [
     {
-      title: 'Анализируемые серверы',
-      value: liveStats?.guilds || stats?.totalServers || 0,
+      title: 'Analyzed Servers',
+      value: liveStats?.guilds || stats?.totalGuilds || 0,
       icon: <BarChart3 className="w-8 h-8" />,
       trend: stats?.serverGrowth || '+12%',
       color: 'text-blue-400',
@@ -79,58 +79,42 @@ const StatsOverview = () => {
       isLive: true
     },
     {
-      title: 'Активные пользователи',
+      title: 'Active Users',
       value: liveStats?.users || stats?.totalUsers || 0,
       icon: <Users className="w-8 h-8" />,
       trend: stats?.userGrowth || '+23%',
       color: 'text-green-400',
       bgColor: 'bg-green-500/20'
-    },
-    {
-      title: 'Сообщений обработано',
-      value: stats?.totalMessages || 0,
-      icon: <MessageSquare className="w-8 h-8" />,
-      trend: stats?.messageGrowth || '+156%',
-      color: 'text-purple-400',
-      bgColor: 'bg-purple-500/20'
-    },
-    {
-      title: 'AI анализов выполнено',
-      value: stats?.totalAnalyses || 0,
-      icon: <TrendingUp className="w-8 h-8" />,
-      trend: stats?.analysisGrowth || '+89%',
-      color: 'text-orange-400',
-      bgColor: 'bg-orange-500/20'
     }
   ];
 
   return (
     <section className="py-16 bg-gray-900">
       <div className="container mx-auto px-6">
-        {/* Заголовок */}
+        {/* Header */}
         <div className="text-center mb-12">
           <h2 className="text-4xl font-bold text-white mb-4">
-            Статистика <span className="text-gradient">Платформы</span>
+            Platform <span className="text-gradient">Statistics</span>
           </h2>
           <p className="text-gray-400 text-lg max-w-2xl mx-auto">
-            Мониторинг и анализ Discord серверов в режиме реального времени
+            Real-time Discord server monitoring and analysis
           </p>
           {liveStats && (
             <div className="mt-4 flex items-center justify-center text-sm text-gray-500">
               <div className="w-2 h-2 bg-green-400 rounded-full mr-2 animate-pulse"></div>
-              Uptime: {Math.floor(liveStats.uptime / 3600)}ч {Math.floor((liveStats.uptime % 3600) / 60)}м
+              Uptime: {Math.floor(liveStats.uptime / 3600)}h {Math.floor((liveStats.uptime % 3600) / 60)}m
             </div>
           )}
         </div>
 
-        {/* Карточки статистики */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
           {statCards.map((stat, index) => (
             <div
               key={index}
               className="glass-effect rounded-xl p-6 hover:bg-white/10 transition-all"
             >
-              {/* Иконка и тренд */}
+              {/* Icon and trend */}
               <div className="flex items-center justify-between mb-4">
                 <div className={`p-3 rounded-lg ${stat.bgColor}`}>
                   <div className={stat.color}>
@@ -143,7 +127,7 @@ const StatsOverview = () => {
                 </div>
               </div>
 
-              {/* Значение */}
+              {/* Value */}
               <div className="mb-2">
                 <div className="text-2xl font-bold text-white flex items-center">
                   {formatNumber(stat.value)}
@@ -153,7 +137,7 @@ const StatsOverview = () => {
                 </div>
               </div>
 
-              {/* Название */}
+              {/* Title */}
               <div className="text-gray-400 text-sm">
                 {stat.title}
               </div>
@@ -161,53 +145,35 @@ const StatsOverview = () => {
           ))}
         </div>
 
-        {/* Дополнительная информация */}
+        {/* Additional Information */}
         {stats && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Среднее здоровье серверов */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Average server health */}
             <div className="glass-effect rounded-xl p-6">
-              <h3 className="text-white font-semibold mb-3">Здоровье сообществ</h3>
+              <h3 className="text-white font-semibold mb-3">Community Health</h3>
               <div className="text-3xl font-bold text-green-400 mb-2">
-                {(stats.averageHealthScore * 100).toFixed(1)}%
+                {(parseFloat(stats.avgHealthScore || 0) * 100).toFixed(1)}%
               </div>
               <div className="w-full bg-gray-700 rounded-full h-2">
                 <div 
                   className="bg-gradient-to-r from-green-500 to-emerald-400 h-2 rounded-full"
-                  style={{ width: `${stats.averageHealthScore * 100}%` }}
+                  style={{ width: `${parseFloat(stats.avgHealthScore || 0) * 100}%` }}
                 ></div>
               </div>
             </div>
 
-            {/* Средняя активность */}
+            {/* Average activity */}
             <div className="glass-effect rounded-xl p-6">
-              <h3 className="text-white font-semibold mb-3">Активность</h3>
+              <h3 className="text-white font-semibold mb-3">Activity</h3>
               <div className="text-3xl font-bold text-blue-400 mb-2">
-                {stats.averageActivity || 'High'}
+                {formatNumber(stats.totalMembers) || 'Loading data'}
               </div>
               <div className="text-gray-400 text-sm">
-                {formatNumber(stats.dailyMessages || 0)} сообщений/день
-              </div>
-            </div>
-
-            {/* AI качество */}
-            <div className="glass-effect rounded-xl p-6">
-              <h3 className="text-white font-semibold mb-3">Точность AI</h3>
-              <div className="text-3xl font-bold text-purple-400 mb-2">
-                {(stats.aiAccuracy * 100).toFixed(1)}%
-              </div>
-              <div className="text-gray-400 text-sm">
-                Качество анализа
+                {formatNumber(stats.totalMembers || 0)} members
               </div>
             </div>
           </div>
         )}
-
-        {/* Время последнего обновления */}
-        <div className="text-center mt-8">
-          <p className="text-gray-500 text-sm">
-            Последнее обновление: {new Date().toLocaleString('ru-RU')}
-          </p>
-        </div>
       </div>
     </section>
   );

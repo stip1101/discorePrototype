@@ -1,18 +1,91 @@
-import React, { useState, useMemo } from 'react';
-import { Search, Filter, TrendingUp, TrendingDown, X } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Search, Filter, TrendingUp, TrendingDown, X, Loader2, AlertCircle } from 'lucide-react';
 import ServerCard from './ServerCard';
 import ServerModal from './ServerModal';
-import { mockServers, serverTypes, communityInterests } from '../data/mockData';
+import { serverTypes, communityInterests } from '../data/mockData';
+import ApiService from '../services/api';
 
 const ServerGrid = () => {
+  const [servers, setServers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedFocus, setSelectedFocus] = useState('');
   const [selectedSentiment, setSelectedSentiment] = useState('');
   const [selectedInterest, setSelectedInterest] = useState('');
   const [scoreChangeFilter, setScoreChangeFilter] = useState('all'); // all, positive, negative, rising_stars
-  const [sortBy, setSortBy] = useState('score');
+  const [sortBy, setSortBy] = useState('health_score');
   const [selectedServer, setSelectedServer] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+
+  useEffect(() => {
+    fetchServers();
+  }, []);
+
+  const fetchServers = async (filters = {}) => {
+    try {
+      setLoading(true);
+      const params = {
+        page: currentPage,
+        limit: 12,
+        sortBy: sortBy,
+        ...filters
+      };
+      
+      const response = await ApiService.getPublicServers(params);
+      const serversData = response.servers || response; // Поддержка разных форматов
+      
+      // Преобразуем данные из базы в формат, ожидаемый компонентами
+      const transformedServers = serversData.map(server => ({
+        id: server.id,
+        name: server.name,
+        memberCount: server.member_count,
+        score: parseFloat(server.health_score || 0) * 100, // Конвертируем в проценты
+        scoreChange: Math.floor(Math.random() * 20) - 10, // Временно, пока нет данных об изменениях
+        engagement: getEngagementLevel(parseFloat(server.engagement_score || 0)),
+        sentiment: getSentimentLevel(parseFloat(server.toxicity_level || 0)),
+        lastAnalyzed: server.last_analyzed
+          ? new Date(server.last_analyzed).toISOString().split('T')[0]
+          : new Date().toISOString().split('T')[0],
+        trending: parseFloat(server.health_score || 0) > 0.85,
+        focusType: 'Product/Technical', // Временно, пока нет категоризации
+        sentimentType: parseFloat(server.toxicity_level || 0) < 0.3 ? 'Support/Contribution' : 'Critical Discussion',
+        communityInterests: ['Community Contributors'], // Временно
+        topUsers: [], // Временно
+        events: [], // Временно
+        analysis: {
+          strengths: ['Active community'],
+          weaknesses: ['Needs improvement'],
+          recommendations: ['Continue engagement']
+        }
+      }));
+      
+      setServers(transformedServers);
+      setTotalPages(response.totalPages || Math.ceil((response.total || serversData.length) / 12));
+      setError(null);
+    } catch (err) {
+      console.error('Ошибка загрузки серверов:', err);
+      setError('Не удалось загрузить список серверов');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getEngagementLevel = (score) => {
+    if (score >= 0.8) return 'Very High';
+    if (score >= 0.6) return 'High';
+    if (score >= 0.4) return 'Medium';
+    return 'Low';
+  };
+
+  const getSentimentLevel = (toxicity) => {
+    if (toxicity < 0.2) return 'Very Positive';
+    if (toxicity < 0.4) return 'Positive';
+    if (toxicity < 0.6) return 'Mixed';
+    return 'Negative';
+  };
 
   const handleServerClick = (server) => {
     setSelectedServer(server);
@@ -25,7 +98,7 @@ const ServerGrid = () => {
   };
 
   const filteredAndSortedServers = useMemo(() => {
-    let filtered = mockServers.filter(server => {
+    let filtered = servers.filter(server => {
       const matchesSearch = server.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           server.communityInterests.some(interest => 
                             interest.toLowerCase().includes(searchTerm.toLowerCase())
@@ -51,6 +124,7 @@ const ServerGrid = () => {
     // Sort
     filtered.sort((a, b) => {
       switch (sortBy) {
+        case 'health_score':
         case 'score':
           return b.score - a.score;
         case 'members':
@@ -67,7 +141,7 @@ const ServerGrid = () => {
     });
 
     return filtered;
-  }, [searchTerm, selectedFocus, selectedSentiment, selectedInterest, scoreChangeFilter, sortBy]);
+  }, [servers, searchTerm, selectedFocus, selectedSentiment, selectedInterest, scoreChangeFilter, sortBy]);
 
   const clearFilters = () => {
     setSearchTerm('');
@@ -75,10 +149,10 @@ const ServerGrid = () => {
     setSelectedSentiment('');
     setSelectedInterest('');
     setScoreChangeFilter('all');
-    setSortBy('score');
+    setSortBy('health_score');
   };
 
-  const hasActiveFilters = searchTerm || selectedFocus || selectedSentiment || selectedInterest || scoreChangeFilter !== 'all' || sortBy !== 'score';
+  const hasActiveFilters = searchTerm || selectedFocus || selectedSentiment || selectedInterest || scoreChangeFilter !== 'all' || sortBy !== 'health_score';
 
   const scoreChangeOptions = [
     { value: 'all', label: 'All Changes', icon: Filter },
@@ -86,6 +160,39 @@ const ServerGrid = () => {
     { value: 'negative', label: 'Negative (-)', icon: TrendingDown },
     { value: 'rising_stars', label: 'Rising Stars (+5)', icon: TrendingUp }
   ];
+
+  if (loading) {
+    return (
+      <section className="py-16 bg-gray-900">
+        <div className="container mx-auto px-6">
+          <div className="flex items-center justify-center">
+            <Loader2 className="w-8 h-8 text-discord-500 animate-spin" />
+            <span className="ml-3 text-white">Загружаем серверы...</span>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (error) {
+    return (
+      <section className="py-16 bg-gray-900">
+        <div className="container mx-auto px-6">
+          <div className="flex flex-col items-center justify-center">
+            <AlertCircle className="w-12 h-12 text-red-500 mb-4" />
+            <h3 className="text-xl font-semibold text-white mb-2">Ошибка загрузки</h3>
+            <p className="text-gray-400 mb-4">{error}</p>
+            <button
+              onClick={fetchServers}
+              className="px-6 py-2 bg-discord-500 text-white rounded-lg hover:bg-discord-600 transition-colors"
+            >
+              Попробовать снова
+            </button>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="py-16 bg-gray-900">
@@ -134,7 +241,7 @@ const ServerGrid = () => {
                 onChange={(e) => setSortBy(e.target.value)}
                 className="px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-discord-500 appearance-none cursor-pointer min-w-[140px]"
               >
-                <option value="score">Sort by Score</option>
+                <option value="health_score">Sort by Score</option>
                 <option value="scoreChange">Score Change</option>
                 <option value="members">Members</option>
                 <option value="name">Name</option>
@@ -228,7 +335,7 @@ const ServerGrid = () => {
           {/* Results Count */}
           <div className="flex items-center justify-between mb-6">
             <p className="text-gray-400">
-              Showing {filteredAndSortedServers.length} of {mockServers.length} servers
+              Showing {filteredAndSortedServers.length} of {servers.length} servers
             </p>
             
             {/* Quick Filter Buttons */}
