@@ -7,21 +7,27 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
-    "test": "jest"
+    "bot": "node src/bot/index.js",
+    "test": "node test-openai.js",
+    "test:openai": "node test-openai.js",
+    "db:migrate": "npx sequelize-cli db:migrate",
+    "db:seed": "npx sequelize-cli db:seed:all"
   },
   "dependencies": {
-    "discord.js": "^14.15.3",
-    "@googleapis/generativeai": "^0.21.0", 
-    "express": "^4.18.2",
+    "openai": "^4.81.0",
     "cors": "^2.8.5",
+    "discord.js": "^14.15.3",
     "dotenv": "^16.4.5",
-    "mongoose": "^8.0.0",
-    "redis": "^4.6.0",
+    "express": "^4.18.2",
+    "mysql2": "^3.6.5",
     "node-cron": "^3.0.3",
+    "redis": "^4.6.0",
+    "sequelize": "^6.35.0",
     "ws": "^8.14.2"
   },
   "devDependencies": {
+    "jest": "^29.7.0",
     "nodemon": "^3.0.1",
-    "jest": "^29.7.0"
+    "sequelize-cli": "^6.6.2"
   }
-} 
+}

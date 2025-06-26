@@ -1,186 +1,157 @@
 import express from 'express';
 import cors from 'cors';
 import { config } from 'dotenv';
-import { DiscoreBot } from './bot/index.js';
-import apiRoutes from './api/routes.js';
+import DiscoreBot from './bot/index.js';
 import { DatabaseService } from './services/databaseService.js';
+import apiRoutes from './api/routes.js';
+import { startHourlyAnalysis } from './scheduler/hourlyAnalysis.js';
 
+// Load environment variables
 config();
 
-class DiscoreServer {
-  constructor() {
-    this.app = express();
-    this.port = process.env.PORT || 3001;
-    this.bot = new DiscoreBot();
-    this.db = new DatabaseService();
+const app = express();
+const PORT = process.env.PORT || 4000;
+
+// Middleware
+app.use(cors({
+  origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+  credentials: true
+}));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// API Routes
+app.use('/api', apiRoutes);
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    service: 'Discore Backend',
+    version: '2.0.0'
+  });
+});
+
+// Root endpoint
+app.get('/', (req, res) => {
+  res.json({
+    message: '🤖 Discore AI Backend',
+    version: '2.0.0',
+    status: 'Running',
+    features: [
+      'Discord Bot Integration',
+      'AI Message Analysis (OpenAI)',
+      'Real-time Statistics',
+      'User & Server Analytics',
+      'Toxicity Detection',
+      'Quality Assessment',
+      'AI Content Detection',
+      'MySQL Database'
+    ],
+    ai_model: process.env.OPENAI_MODEL || 'gpt-4.1-nano-2025-04-14',
+    endpoints: {
+      health: '/health',
+      api: '/api',
+      docs: '/api/docs'
+    }
+  });
+});
+
+// Global error handler
+app.use((err, req, res, next) => {
+  console.error('❌ Global error:', err);
+  res.status(500).json({
+    error: 'Internal Server Error',
+    message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// 404 handler
+app.use('*', (req, res) => {
+  res.status(404).json({
+    error: 'Not Found',
+    message: `Endpoint ${req.method} ${req.originalUrl} not found`,
+    availableEndpoints: ['/health', '/api']
+  });
+});
+
+async function startApplication() {
+  try {
+    console.log('🚀 Starting Discore Application...');
     
-    this.setupMiddleware();
-    this.setupRoutes();
-  }
-
-  setupMiddleware() {
-    // CORS для фронтенда
-    this.app.use(cors({
-      origin: [
-        'http://localhost:3000',
-        'http://localhost:5173',
-        'https://discore.com',
-        'https://www.discore.com'
-      ],
-      credentials: true
-    }));
-
-    // Парсинг JSON
-    this.app.use(express.json({ limit: '10mb' }));
-    this.app.use(express.urlencoded({ extended: true }));
-
-    // Логирование запросов
-    this.app.use((req, res, next) => {
-      console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
-      next();
+    // Initialize database connection
+    console.log('📦 Connecting to MySQL database...');
+    const databaseService = new DatabaseService();
+    await databaseService.connect();
+    
+    // Start Express server
+    const server = app.listen(PORT, () => {
+      console.log(`🌐 API Server running on port ${PORT}`);
+      console.log(`📍 Health check: http://localhost:${PORT}/health`);
+      console.log(`📡 API Base: http://localhost:${PORT}/api`);
     });
 
-    // Rate limiting (базовый)
-    const rateLimitMap = new Map();
-    this.app.use('/api', (req, res, next) => {
-      const ip = req.ip || req.connection.remoteAddress;
-      const now = Date.now();
-      const windowMs = 60 * 1000; // 1 минута
-      const maxRequests = 100;
-
-      if (!rateLimitMap.has(ip)) {
-        rateLimitMap.set(ip, { count: 1, resetTime: now + windowMs });
-        return next();
-      }
-
-      const limit = rateLimitMap.get(ip);
-      if (now > limit.resetTime) {
-        limit.count = 1;
-        limit.resetTime = now + windowMs;
-        return next();
-      }
-
-      if (limit.count >= maxRequests) {
-        return res.status(429).json({
-          success: false,
-          error: 'Слишком много запросов. Попробуйте позже.'
-        });
-      }
-
-      limit.count++;
-      next();
-    });
-  }
-
-  setupRoutes() {
-    // Health check
-    this.app.get('/health', (req, res) => {
-      res.json({
-        status: 'ok',
-        timestamp: new Date().toISOString(),
-        bot: this.bot.client.isReady() ? 'connected' : 'disconnected',
-        version: process.env.npm_package_version || '1.0.0'
-      });
-    });
-
-    // API routes
-    this.app.use('/api', apiRoutes);
-
-    // Статистика в реальном времени (WebSocket будет позже)
-    this.app.get('/api/live/stats', async (req, res) => {
+    // Initialize Discord Bot
+    console.log('🤖 Starting Discord Bot...');
+    const bot = new DiscoreBot();
+    await bot.start();
+    
+    // Graceful shutdown handling
+    const gracefulShutdown = async (signal) => {
+      console.log(`\n🛑 Received ${signal}. Starting graceful shutdown...`);
+      
       try {
-        const liveStats = {
-          guilds: this.bot.client.guilds.cache.size,
-          users: this.bot.client.users.cache.size,
-          uptime: process.uptime(),
-          memoryUsage: process.memoryUsage(),
-          timestamp: new Date().toISOString()
-        };
-
-        res.json({
-          success: true,
-          data: liveStats
+        // Close Discord bot
+        if (bot.client) {
+          console.log('🤖 Closing Discord bot...');
+          bot.client.destroy();
+        }
+        
+        // Close database connection
+        console.log('📦 Closing database connection...');
+        await databaseService.disconnect();
+        
+        // Close Express server
+        console.log('🌐 Closing HTTP server...');
+        server.close(() => {
+          console.log('✅ Application shutdown complete');
+          process.exit(0);
         });
       } catch (error) {
-        res.status(500).json({
-          success: false,
-          error: 'Ошибка получения статистики'
-        });
+        console.error('❌ Error during shutdown:', error);
+        process.exit(1);
       }
+    };
+
+    // Listen for shutdown signals
+    process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+    process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+    
+    // Handle uncaught exceptions
+    process.on('uncaughtException', (error) => {
+      console.error('💥 Uncaught Exception:', error);
+      gracefulShutdown('uncaughtException');
+    });
+    
+    process.on('unhandledRejection', (reason, promise) => {
+      console.error('💥 Unhandled Rejection at:', promise, 'reason:', reason);
+      gracefulShutdown('unhandledRejection');
     });
 
-    // Bot invite URL
-    this.app.get('/api/bot/invite', (req, res) => {
-      const permissions = [
-        'ViewChannel',
-        'SendMessages', 
-        'ReadMessageHistory',
-        'AddReactions',
-        'UseSlashCommands',
-        'ManageMessages'
-      ].join('%20');
-
-      const inviteUrl = `https://discord.com/api/oauth2/authorize?client_id=${process.env.DISCORD_CLIENT_ID}&permissions=274877906944&scope=bot%20applications.commands`;
-
-      res.json({
-        success: true,
-        data: { inviteUrl }
-      });
-    });
-
-    // 404 handler
-    this.app.use('*', (req, res) => {
-      res.status(404).json({
-        success: false,
-        error: 'Эндпоинт не найден'
-      });
-    });
-
-    // Error handler
-    this.app.use((error, req, res, next) => {
-      console.error('Ошибка сервера:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Внутренняя ошибка сервера'
-      });
-    });
-  }
-
-  async start() {
-    try {
-      // Подключаемся к БД
-      await this.db.connect();
-      console.log('✅ База данных подключена');
-
-      // Запускаем бота
-      await this.bot.start();
-      console.log('✅ Discord бот запущен');
-
-      // Запускаем веб-сервер
-      this.app.listen(this.port, () => {
-        console.log(`✅ API сервер запущен на порту ${this.port}`);
-        console.log(`🌐 Health check: http://localhost:${this.port}/health`);
-        console.log(`📊 API доступно на: http://localhost:${this.port}/api`);
-      });
-
-    } catch (error) {
-      console.error('❌ Ошибка запуска сервера:', error);
-      process.exit(1);
-    }
+    console.log('✅ Discore Application started successfully!');
+    console.log('📊 Ready to analyze Discord servers with AI');
+    
+    // Start background hourly analysis scheduler
+    startHourlyAnalysis(databaseService);
+    console.log('⏰ Hourly analysis scheduler initialised (runs at the top of every hour)');
+    
+  } catch (error) {
+    console.error('💥 Failed to start application:', error);
+    process.exit(1);
   }
 }
 
-// Graceful shutdown
-process.on('SIGINT', () => {
-  console.log('\n🛑 Получен сигнал SIGINT. Завершение работы...');
-  process.exit(0);
-});
-
-process.on('SIGTERM', () => {
-  console.log('\n🛑 Получен сигнал SIGTERM. Завершение работы...');
-  process.exit(0);
-});
-
-// Запускаем сервер
-const server = new DiscoreServer();
-server.start().catch(console.error); 
+// Start the application
+startApplication(); 
