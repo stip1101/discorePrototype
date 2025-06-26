@@ -14,7 +14,17 @@ const PORT = process.env.PORT || 4000;
 
 // Middleware
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+  origin: (origin, cb) => {
+    const allowed = [
+      'http://localhost:3000',
+      'https://discorepreview.github.io',
+      'https://discorepreview.loca.lt'
+    ];
+    if (!origin || allowed.includes(origin)) {
+      return cb(null, true);
+    }
+    return cb(new Error(`CORS: origin ${origin} not allowed`));
+  },
   credentials: true
 }));
 app.use(express.json({ limit: '10mb' }));
