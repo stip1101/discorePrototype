@@ -186,7 +186,7 @@ const ServerGrid = () => {
               onClick={fetchServers}
               className="px-6 py-2 bg-discord-500 text-white rounded-lg hover:bg-discord-600 transition-colors"
             >
-              Попробовать снова
+              Try again
             </button>
           </div>
         </div>
