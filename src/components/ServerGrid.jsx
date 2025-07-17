@@ -180,7 +180,7 @@ const ServerGrid = () => {
         <div className="container mx-auto px-6">
           <div className="flex flex-col items-center justify-center">
             <AlertCircle className="w-12 h-12 text-red-500 mb-4" />
-            <h3 className="text-xl font-semibold text-white mb-2">Ошибка загрузки</h3>
+            <h3 className="text-xl font-semibold text-white mb-2">Failed to load servers</h3>
             <p className="text-gray-400 mb-4">{error}</p>
             <button
               onClick={fetchServers}
