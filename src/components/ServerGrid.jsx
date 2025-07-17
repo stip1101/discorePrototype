@@ -66,8 +66,8 @@ const ServerGrid = () => {
       setTotalPages(response.totalPages || Math.ceil((response.total || serversData.length) / 12));
       setError(null);
     } catch (err) {
-      console.error('Ошибка загрузки серверов:', err);
-      setError('Не удалось загрузить список серверов');
+      console.error('Error loading servers:', err);
+      setError('Failed to load server list');
     } finally {
       setLoading(false);
     }
